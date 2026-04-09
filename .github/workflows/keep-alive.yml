@@ -1,0 +1,22 @@
+name: Keep Backends Alive
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-backends:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        run: |
+          echo "Pinging Render..."
+          curl -f -s "https://nexusedu-backend-0bjq.onrender.com/" \
+            && echo "Render: OK" || echo "Render: DOWN"
+
+      - name: Ping Replit Backend  
+        run: |
+          echo "Pinging Replit..."
+          curl -f -s "https://edbe7e18-233b-4ff5-bed9-83c4e0edd51e-00-25a1ryv2rxe0o.sisko.replit.dev/" \
+            && echo "Replit: OK" || echo "Replit: DOWN"
