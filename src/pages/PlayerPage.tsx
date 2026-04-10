@@ -444,16 +444,18 @@ export function PlayerPage() {
                 </div>
                 <div className="flex space-x-4">
                   <button 
-                    onClick={() => {
-                      import('jspdf').then(({ jsPDF }) => {
-                        const doc = new jsPDF();
-                        doc.setFontSize(20);
-                        doc.text(`Notes: ${video.title}`, 20, 20);
-                        doc.setFontSize(12);
-                        const splitText = doc.splitTextToSize(notesText, 170);
-                        doc.text(splitText, 20, 30);
-                        doc.save(`${video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_notes.pdf`);
-                      });
+                    onClick={async () => {
+                      const html2canvas = (await import('html2canvas')).default;
+                      const { jsPDF } = await import('jspdf');
+                      const notesElement = document.getElementById('notes-content');
+                      if (!notesElement) return;
+                      const canvas = await html2canvas(notesElement, { scale: 2, useCORS: true });
+                      const imgData = canvas.toDataURL('image/png');
+                      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                      const width = pdf.internal.pageSize.getWidth();
+                      const height = (canvas.height * width) / canvas.width;
+                      pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+                      pdf.save(`${video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_notes.pdf`);
                     }}
                     className="bangla text-sm text-indigo-400 hover:text-indigo-300 font-medium"
                   >
@@ -467,12 +469,14 @@ export function PlayerPage() {
                   </button>
                 </div>
               </div>
-              <textarea
-                value={notesText}
-                onChange={handleNotesChange}
-                placeholder="আপনার নোটস এখানে লিখুন... এগুলো স্বয়ংক্রিয়ভাবে সেভ হবে।"
-                className="bangla w-full h-48 p-4 border border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none bg-gray-900 text-white placeholder-gray-500"
-              />
+              <div id="notes-content">
+                <textarea
+                  value={notesText}
+                  onChange={handleNotesChange}
+                  placeholder="আপনার নোটস এখানে লিখুন... এগুলো স্বয়ংক্রিয়ভাবে সেভ হবে।"
+                  className="bangla w-full h-48 p-4 border border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none bg-gray-900 text-white placeholder-gray-500"
+                />
+              </div>
             </div>
           )}
 
