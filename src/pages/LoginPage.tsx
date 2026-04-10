@@ -78,6 +78,7 @@ export const LoginPage: React.FC = () => {
         password: password,
         options: {
           data: {
+            name: fullName,
             full_name: fullName,
             display_name: fullName.split(' ')[0]
           }
@@ -133,7 +134,7 @@ export const LoginPage: React.FC = () => {
             {
               id: data.user.id,
               email: data.user.email,
-              display_name: data.user.email?.split('@')[0] || 'User',
+              full_name: data.user.email?.split('@')[0] || 'User',
               role: 'user',
             },
             { onConflict: 'id', ignoreDuplicates: true }

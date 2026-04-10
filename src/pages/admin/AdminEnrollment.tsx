@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Trash2, Copy, CheckCircle2, XCircle, Loader2, ShieldAlert } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
-import { useCatalog } from '../../contexts/CatalogContext';
 import { Button } from '../../components/ui/Button';
 
 export const AdminEnrollment: React.FC = () => {
-  const { catalog } = useCatalog();
   const [codes, setCodes] = useState<any[]>([]);
   const [accessLogs, setAccessLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,6 +134,20 @@ export const AdminEnrollment: React.FC = () => {
     showToast('Code copied to clipboard');
   };
 
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [cycles, setCycles] = useState<any[]>([]);
+  const [chapters, setChapters] = useState<any[]>([]);
+
+  useEffect(() => {
+    supabase.from('subjects')
+      .select('id, name, name_bn, slug')
+      .order('display_order')
+      .then(({ data, error }) => {
+        if (error) console.error('Subjects fetch error:', error);
+        setSubjects(data || []);
+      });
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -144,9 +156,35 @@ export const AdminEnrollment: React.FC = () => {
     );
   }
 
-  const subjects = catalog?.subjects || [];
-  const cycles = subjects.find(s => s.id === selectedSubject)?.cycles || [];
-  const chapters = cycles.find(c => c.id === selectedCycle)?.chapters || [];
+  const handleSubjectChange = async (subjectId: string) => {
+    setSelectedSubject(subjectId);
+    setSelectedCycle('');
+    setSelectedChapter('');
+    setCycles([]);
+    setChapters([]);
+    
+    if (!subjectId) return;
+    
+    const { data } = await supabase.from('cycles')
+      .select('id, name, name_bn')
+      .eq('subject_id', subjectId)
+      .order('display_order');
+    setCycles(data || []);
+  };
+
+  const handleCycleChange = async (cycleId: string) => {
+    setSelectedCycle(cycleId);
+    setSelectedChapter('');
+    setChapters([]);
+    
+    if (!cycleId) return;
+    
+    const { data } = await supabase.from('chapters')
+      .select('id, name, name_bn')
+      .eq('cycle_id', cycleId)
+      .order('display_order');
+    setChapters(data || []);
+  };
 
   return (
     <div className="space-y-8 pb-20">
@@ -162,7 +200,7 @@ export const AdminEnrollment: React.FC = () => {
             <label className="block text-sm font-medium text-text-secondary mb-1">Subject</label>
             <select
               value={selectedSubject}
-              onChange={(e) => { setSelectedSubject(e.target.value); setSelectedCycle(''); setSelectedChapter(''); }}
+              onChange={(e) => handleSubjectChange(e.target.value)}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               required
             >
@@ -174,7 +212,7 @@ export const AdminEnrollment: React.FC = () => {
             <label className="block text-sm font-medium text-text-secondary mb-1">Cycle</label>
             <select
               value={selectedCycle}
-              onChange={(e) => { setSelectedCycle(e.target.value); setSelectedChapter(''); }}
+              onChange={(e) => handleCycleChange(e.target.value)}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               required
               disabled={!selectedSubject}

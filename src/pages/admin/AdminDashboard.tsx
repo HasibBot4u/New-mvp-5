@@ -8,7 +8,7 @@ import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/Toast';
 import { formatRelativeTime } from '../../lib/utils';
 import { Link } from 'react-router-dom';
-import { getWorkingBackend, refreshCatalog as apiRefreshCatalog } from '../../lib/api';
+import { getWorkingBackend, refreshCatalog as apiRefreshCatalog, api } from '../../lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { setPageTitle } from '../../utils/setPageTitle';
 
@@ -56,12 +56,49 @@ export const AdminDashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const fetchFallbackStats = async () => {
+    try {
+      const [profilesRes, subjectsRes, chaptersRes, videosRes, recentSignupsRes, recentActivityRes] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('subjects').select('*', { count: 'exact', head: true }),
+        supabase.from('chapters').select('*', { count: 'exact', head: true }),
+        supabase.from('videos').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('id, full_name, email, created_at').order('created_at', { ascending: false }).limit(5),
+        supabase.from('activity_logs').select('id, action, created_at, profiles(full_name)').order('created_at', { ascending: false }).limit(5)
+      ]);
+
+      setStats(prev => ({
+        ...prev,
+        total_users: profilesRes.count || 0,
+        total_subjects: subjectsRes.count || 0,
+        total_chapters: chaptersRes.count || 0,
+        total_videos: videosRes.count || 0
+      }));
+
+      if (recentSignupsRes.data) {
+        setRecentSignups(recentSignupsRes.data);
+      }
+      
+      if (recentActivityRes.data) {
+        setRecentActivity(recentActivityRes.data.map(log => ({
+          id: log.id,
+          action: log.action,
+          created_at: log.created_at,
+          user_name: (Array.isArray(log.profiles) ? log.profiles[0]?.full_name : (log.profiles as any)?.full_name) || 'Unknown'
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching fallback stats:', error);
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
       const { data: adminStats, error } = await supabase.rpc('get_admin_stats');
       
       if (error) {
-        console.error('Error fetching admin stats:', error);
+        console.error('Error fetching admin stats via RPC:', error);
+        await fetchFallbackStats();
       } else if (adminStats) {
         setStats({
           total_users: adminStats.total_users || 0,
@@ -110,23 +147,11 @@ export const AdminDashboard: React.FC = () => {
   const fetchHealth = async () => {
     setIsHealthLoading(true);
     try {
-      const backend = await getWorkingBackend();
-      const response = await fetch(`${backend}/api/health`);
-      if (response.ok) {
-        const text = await response.text();
-        try {
-          const data = JSON.parse(text);
-          setHealth(data);
-        } catch {
-          console.error('Invalid JSON from health endpoint:', text.substring(0, 100));
-          setHealth({ status: 'error', telegram: 'error', videos_cached: 0, messages_cached: 0, channels_resolved: 0, catalog_age_seconds: 0 });
-        }
-      } else {
-        setHealth({ status: 'error', telegram: 'error', videos_cached: 0, messages_cached: 0, channels_resolved: 0, catalog_age_seconds: 0 });
-      }
+      const data = await api.fetchBackendHealth();
+      setHealth(data as any);
     } catch (error) {
       console.warn('Health check failed:', error);
-      setHealth({ status: 'error', telegram: 'error', videos_cached: 0, messages_cached: 0, channels_resolved: 0, catalog_age_seconds: 0 });
+      setHealth({ status: 'offline', telegram: 'offline', videos_cached: 0, messages_cached: 0, channels_resolved: 0, catalog_age_seconds: 0 });
     } finally {
       setIsHealthLoading(false);
     }
@@ -138,6 +163,7 @@ export const AdminDashboard: React.FC = () => {
     
     const healthInterval = setInterval(fetchHealth, 30000);
     return () => clearInterval(healthInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleForceWarmup = async () => {
@@ -249,12 +275,32 @@ export const AdminDashboard: React.FC = () => {
         return <><CheckCircle size={16} className="text-green-500 mr-2" /><span className="font-medium text-green-700 bangla">টেলিগ্রাম সংযুক্ত ✓</span></>;
       case 'reconnecting':
         return <><RefreshCw size={16} className="text-amber-500 mr-2 animate-spin" /><span className="font-medium text-amber-700 bangla">সংযোগ হচ্ছে ⟳</span></>;
+      case 'offline':
+        return <><AlertTriangle size={16} className="text-amber-500 mr-2" /><span className="font-medium text-amber-700 bangla">সার্ভার ঘুমাচ্ছে...</span></>;
       case 'error':
       case 'disconnected':
         return <><XCircle size={16} className="text-red-500 mr-2" /><span className="font-medium text-red-700 bangla">সার্ভার বন্ধ ✗</span></>;
       default:
         return <><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span><span className="font-medium text-gray-700 bangla">অজানা অবস্থা</span></>;
     }
+  };
+
+  const renderOverallStatus = () => {
+    if (!health) return <><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span><span className="font-medium text-gray-700 bangla">চেক করা হচ্ছে...</span></>;
+    
+    if (health.status === 'offline') {
+      return <><AlertTriangle size={16} className="text-amber-500 mr-2" /><span className="font-medium text-amber-700 bangla">সার্ভার চালু হচ্ছে... (৩০-৬০ সেকেন্ড লাগতে পারে)</span></>;
+    }
+    
+    if (health.status === 'ok' && health.telegram === 'connected') {
+      return <><CheckCircle size={16} className="text-green-500 mr-2" /><span className="font-medium text-green-700 bangla">সব ঠিক আছে ✓</span></>;
+    }
+    
+    if (health.status === 'degraded' || health.telegram !== 'connected') {
+      return <><RefreshCw size={16} className="text-amber-500 mr-2 animate-spin" /><span className="font-medium text-amber-700 bangla">সংযোগ হচ্ছে... ⟳</span></>;
+    }
+
+    return <><AlertTriangle size={16} className="text-amber-500 mr-2" /><span className="font-medium text-amber-700 bangla">সমস্যা</span></>;
   };
 
   return (
@@ -306,12 +352,8 @@ export const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 rounded-lg bg-gray-50 border border-gray-100">
                 <p className="text-xs text-text-secondary mb-1 bangla">স্ট্যাটাস</p>
-                <div className="flex items-center gap-2">
-                  {health.status === 'ok' ? (
-                    <><CheckCircle size={16} className="text-green-500" /><span className="font-medium text-green-700 bangla">সক্রিয়</span></>
-                  ) : (
-                    <><AlertTriangle size={16} className="text-amber-500" /><span className="font-medium text-amber-700 bangla">সমস্যা</span></>
-                  )}
+                <div className="flex items-center">
+                  {renderOverallStatus()}
                 </div>
               </div>
               <div className="p-4 rounded-lg bg-gray-50 border border-gray-100">

@@ -5,7 +5,7 @@ import { useCatalog } from '../contexts/CatalogContext';
 import { useUserStats } from '../hooks/useUserStats';
 import { Skeleton } from '../components/ui/Skeleton';
 
-export function ProgressPage() {
+export default function ProgressPage() {
   const { catalog, isLoading } = useCatalog();
   const { stats } = useUserStats();
   const [visible, setVisible] = useState(false);

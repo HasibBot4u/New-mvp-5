@@ -27,6 +27,12 @@ const SearchPage = React.lazy(() => import('./pages/SearchPage').then(m => ({ de
 const NotificationsPage = React.lazy(() => import('./pages/NotificationsPage'));
 const LiveClassPage = React.lazy(() => import('./pages/LiveClassPage').then(m => ({ default: m.LiveClassPage })));
 
+const ProgressPage = React.lazy(() => import('./pages/ProgressPage'));
+const AboutPage = React.lazy(() => import('./pages/AboutPage'));
+const ContactPage = React.lazy(() => import('./pages/ContactPage'));
+const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage'));
+const TermsPage = React.lazy(() => import('./pages/TermsPage'));
+
 // Admin Pages
 const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const AdminUsers = React.lazy(() => import('./pages/admin/AdminUsers').then(m => ({ default: m.AdminUsers })));
@@ -110,6 +116,11 @@ function App() {
                   <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/contact" element={<ContactPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+
                   <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/courses" element={<CoursesPage />} />
@@ -122,6 +133,7 @@ function App() {
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/live" element={<LiveClassPage />} />
+                    <Route path="/progress" element={<ProgressPage />} />
                   </Route>
 
                   <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminLayout /></ProtectedRoute>}>

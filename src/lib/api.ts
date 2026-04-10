@@ -88,7 +88,7 @@ export const api = {
   fetchBackendHealth,
   getCatalogWithCache: async () => {
     const backend = await getWorkingBackend();
-    const r = await fetchWithTimeout(`${backend}/api/catalog`, 10000);
+    const r = await fetchWithTimeout(`${backend}/api/catalog`, 60000);
     if (!r.ok) throw new Error('Failed to fetch catalog');
     return r.json();
   },

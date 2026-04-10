@@ -3,7 +3,7 @@ import { PublicNavbar } from '../components/public/PublicNavbar';
 import { PublicFooter } from '../components/public/PublicFooter';
 import { Mail, Phone, MapPin, MessageSquare, CheckCircle2, Send } from 'lucide-react';
 
-export const ContactPage: React.FC = () => {
+export default function ContactPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {

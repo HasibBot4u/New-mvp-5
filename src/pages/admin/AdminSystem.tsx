@@ -4,7 +4,7 @@ import { useToast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Activity, RefreshCw, Zap, Bug, Database, Settings as SettingsIcon, ShieldAlert, CheckCircle, XCircle, Key, Plus, Trash2 } from 'lucide-react';
-import { getWorkingBackend } from '../../lib/api';
+import { getWorkingBackend, api } from '../../lib/api';
 import { useSystemSettings } from '../../contexts/SystemSettingsContext';
 import { supabase } from '../../lib/supabase';
 
@@ -57,14 +57,8 @@ export const AdminSystem: React.FC = () => {
 
   const fetchHealth = async () => {
     try {
-      const backend = await getWorkingBackend();
-      const res = await fetch(`${backend}/api/health`);
-      if (res.ok) {
-        const data = await res.json();
-        setHealth(data);
-      } else {
-        setHealth(null);
-      }
+      const data = await api.fetchBackendHealth();
+      setHealth(data as any);
     } catch {
       setHealth(null);
     } finally {

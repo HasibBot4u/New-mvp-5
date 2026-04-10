@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCatalog } from '../../contexts/CatalogContext';
+import { useCatalog, clearCatalogCache } from '../../contexts/CatalogContext';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -9,7 +9,7 @@ import { useToast } from '../../components/ui/Toast';
 import { getWorkingBackend } from '../../lib/api';
 
 export const AdminContent: React.FC = () => {
-  const { catalog, isLoading, refreshCatalog } = useCatalog();
+  const { isLoading, refreshCatalog } = useCatalog();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'subjects' | 'cycles' | 'chapters' | 'videos' | 'live_classes' | 'announcements'>('subjects');
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +19,13 @@ export const AdminContent: React.FC = () => {
   const [formData, setFormData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   
+  // Content State
+  const [allSubjects, setAllSubjects] = useState<any[]>([]);
+  const [allCycles, setAllCycles] = useState<any[]>([]);
+  const [allChapters, setAllChapters] = useState<any[]>([]);
+  const [allVideos, setAllVideos] = useState<any[]>([]);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
+
   // Live Classes State
   const [liveClasses, setLiveClasses] = useState<any[]>([]);
   const [isLoadingLiveClasses, setIsLoadingLiveClasses] = useState(false);
@@ -28,9 +35,36 @@ export const AdminContent: React.FC = () => {
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false);
 
   React.useEffect(() => {
+    fetchAllContent();
     fetchLiveClasses();
     fetchAnnouncements();
   }, []);
+
+  const fetchAllContent = async () => {
+    setIsLoadingContent(true);
+    try {
+      const [subjectsRes, cyclesRes, chaptersRes, videosRes] = await Promise.all([
+        supabase.from('subjects').select('*').order('display_order'),
+        supabase.from('cycles').select('*').order('display_order'),
+        supabase.from('chapters').select('*').order('display_order'),
+        supabase.from('videos').select('*').order('display_order')
+      ]);
+
+      if (subjectsRes.error) throw subjectsRes.error;
+      if (cyclesRes.error) throw cyclesRes.error;
+      if (chaptersRes.error) throw chaptersRes.error;
+      if (videosRes.error) throw videosRes.error;
+
+      setAllSubjects(subjectsRes.data || []);
+      setAllCycles(cyclesRes.data || []);
+      setAllChapters(chaptersRes.data || []);
+      setAllVideos(videosRes.data || []);
+    } catch (err) {
+      console.error('Error fetching content:', err);
+    } finally {
+      setIsLoadingContent(false);
+    }
+  };
 
   const fetchAnnouncements = async () => {
     setIsLoadingAnnouncements(true);
@@ -81,7 +115,7 @@ export const AdminContent: React.FC = () => {
   const [prefetchStatus, setPrefetchStatus] = useState<Record<string, 'loading' | 'success' | 'error'>>({});
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
 
-  if (isLoading) {
+  if (isLoading || isLoadingContent) {
     return (
       <div className="space-y-6 pb-20 animate-pulse">
         <div className="flex justify-between items-center">
@@ -94,35 +128,35 @@ export const AdminContent: React.FC = () => {
     );
   }
 
-  const allCycles = catalog?.subjects.flatMap(s => s.cycles) || [];
-  const allChapters = allCycles.flatMap(c => c.chapters) || [];
-  const allVideos = allChapters.flatMap(c => c.videos) || [];
-
-  const filteredSubjects = catalog?.subjects.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSubjects = allSubjects.filter(s => 
+    (s.name && s.name.toLowerCase().includes(searchQuery.toLowerCase())) || 
+    (s.name_bn && s.name_bn.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (s.description && s.description.toLowerCase().includes(searchQuery.toLowerCase()))
   ) || [];
 
   const filteredCycles = allCycles.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.telegram_channel_id?.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (c.name_bn && c.name_bn.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (c.telegram_channel_id && c.telegram_channel_id.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const filteredChapters = allChapters.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (c.name_bn && c.name_bn.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const filteredVideos = allVideos.filter(v => 
-    v.title.toLowerCase().includes(searchQuery.toLowerCase())
+    (v.title && v.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (v.title_bn && v.title_bn.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const filteredLiveClasses = liveClasses.filter(c => 
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.title && c.title.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const filteredAnnouncements = announcements.filter(a => 
-    a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.body?.toLowerCase().includes(searchQuery.toLowerCase())
+    (a.title && a.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (a.body && a.body.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const tabs = [
@@ -198,11 +232,13 @@ export const AdminContent: React.FC = () => {
       }
 
       setIsModalOpen(false);
+      clearCatalogCache();
       if (activeTab === 'live_classes') {
         await fetchLiveClasses();
       } else if (activeTab === 'announcements') {
         await fetchAnnouncements();
       } else {
+        await fetchAllContent();
         await refreshCatalog();
       }
       showToast(`${activeTab.slice(0, -1)} saved successfully`);
@@ -226,6 +262,8 @@ export const AdminContent: React.FC = () => {
       try {
         const { error } = await supabase.from('videos').delete().in('id', Array.from(selectedVideos));
         if (error) throw error;
+        clearCatalogCache();
+        await fetchAllContent();
         await refreshCatalog();
         setSelectedVideos(new Set());
         showToast('Videos deleted successfully');
@@ -237,11 +275,13 @@ export const AdminContent: React.FC = () => {
         const { error } = await supabase.from(itemToDelete.table).delete().eq('id', itemToDelete.id);
         if (error) throw error;
         
+        clearCatalogCache();
         if (itemToDelete.table === 'live_classes') {
           await fetchLiveClasses();
         } else if (itemToDelete.table === 'announcements') {
           await fetchAnnouncements();
         } else {
+          await fetchAllContent();
           await refreshCatalog();
         }
 
@@ -286,6 +326,8 @@ export const AdminContent: React.FC = () => {
     try {
       const { error } = await supabase.from('videos').update({ is_active: !currentStatus }).eq('id', id);
       if (error) throw error;
+      clearCatalogCache();
+      await fetchAllContent();
       await refreshCatalog();
       showToast(`Video ${!currentStatus ? 'activated' : 'deactivated'}`);
     } catch (error) {
@@ -335,6 +377,8 @@ export const AdminContent: React.FC = () => {
     try {
       const { error } = await supabase.from('videos').update({ display_order: newOrder }).eq('id', id);
       if (error) throw error;
+      clearCatalogCache();
+      await fetchAllContent();
       await refreshCatalog();
       showToast('Display order updated');
     } catch {
@@ -357,7 +401,8 @@ export const AdminContent: React.FC = () => {
               <thead className="bg-surface text-xs uppercase text-text-primary border-b border-border">
                 <tr>
                   <th className="px-6 py-3">Name</th>
-                  <th className="px-6 py-3">Description</th>
+                  <th className="px-6 py-3">Name (BN)</th>
+                  <th className="px-6 py-3">Slug</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -365,7 +410,8 @@ export const AdminContent: React.FC = () => {
                 {filteredSubjects.map((subject) => (
                   <tr key={subject.id} className="border-b border-border hover:bg-surface/50">
                     <td className="px-6 py-4 font-medium text-text-primary">{subject.name}</td>
-                    <td className="px-6 py-4 truncate max-w-xs">{subject.description}</td>
+                    <td className="px-6 py-4 font-medium text-text-primary bangla">{subject.name_bn}</td>
+                    <td className="px-6 py-4 font-mono text-xs">{subject.slug}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEdit(subject)}><Edit2 size={14} /></Button>
@@ -393,7 +439,7 @@ export const AdminContent: React.FC = () => {
               </thead>
               <tbody>
                 {filteredCycles.map((cycle) => {
-                  const subject = catalog?.subjects.find(s => s.cycles.some(c => c.id === cycle.id));
+                  const subject = allSubjects.find(s => s.id === cycle.subject_id);
                   return (
                     <tr key={cycle.id} className="border-b border-border hover:bg-surface/50">
                       <td className="px-6 py-4 font-medium text-text-primary">{cycle.name}</td>
@@ -430,14 +476,14 @@ export const AdminContent: React.FC = () => {
               <tbody>
                 {filteredChapters.map((chapter) => {
                   const cycle = allCycles.find(c => c.id === chapter.cycle_id);
-                  const subject = catalog?.subjects.find(s => s.cycles.some(c => c.id === cycle?.id));
+                  const subject = allSubjects.find(s => s.id === cycle?.subject_id);
                   return (
                     <tr key={chapter.id} className="border-b border-border hover:bg-surface/50">
                       <td className="px-6 py-4 font-medium text-text-primary">{chapter.name}</td>
                       <td className="px-6 py-4"><Badge variant="outline">{cycle?.name}</Badge></td>
                       <td className="px-6 py-4"><Badge variant="outline">{subject?.name}</Badge></td>
                       <td className="px-6 py-4">{chapter.display_order}</td>
-                      <td className="px-6 py-4 text-text-secondary">{chapter.videos.length}</td>
+                      <td className="px-6 py-4 text-text-secondary">{allVideos.filter(v => v.chapter_id === chapter.id).length}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEdit(chapter)}><Edit2 size={14} /></Button>
@@ -580,7 +626,7 @@ export const AdminContent: React.FC = () => {
                   </tr>
                 ) : (
                   filteredLiveClasses.map((cls) => {
-                    const subject = catalog?.subjects.find(s => s.id === cls.subject_id);
+                    const subject = allSubjects.find(s => s.id === cls.subject_id);
                     return (
                       <tr key={cls.id} className="border-b border-border hover:bg-surface/50">
                         <td className="px-6 py-4 font-medium text-text-primary truncate max-w-[200px]" title={cls.title}>{cls.title}</td>
@@ -750,6 +796,27 @@ export const AdminContent: React.FC = () => {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-text-primary mb-1">Name (BN)</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name_bn || ''}
+                  onChange={(e) => setFormData({ ...formData, name_bn: e.target.value })}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary bangla"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1">Slug</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.slug || ''}
+                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                  placeholder="e.g. physics"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-text-primary mb-1">Description</label>
                 <textarea
                   value={formData.description || ''}
@@ -792,7 +859,7 @@ export const AdminContent: React.FC = () => {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select Subject</option>
-                  {catalog?.subjects.map(s => (
+                  {allSubjects.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
@@ -989,7 +1056,7 @@ export const AdminContent: React.FC = () => {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select Subject</option>
-                  {catalog?.subjects.map(s => (
+                  {allSubjects.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>

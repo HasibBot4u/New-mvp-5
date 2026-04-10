@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { PublicNavbar } from '../components/public/PublicNavbar';
 import { PublicFooter } from '../components/public/PublicFooter';
 import { setPageTitle } from '../utils/setPageTitle';
 import { Target, Users, Zap, Shield } from 'lucide-react';
 
-export const AboutPage: React.FC = () => {
+export default function AboutPage() {
   useEffect(() => { setPageTitle('আমাদের সম্পর্কে'); }, []);
 
   return (
